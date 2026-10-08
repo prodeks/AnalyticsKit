@@ -141,3 +141,9 @@
 | -105 | Товары ещё не загружены |
 
 Положительные коды приходят напрямую от Apple (`SKErrorDomain`) или Adapty (`AdaptyError`).
+
+## Feature flags
+
+`experimentVariant(for:)` читает вариант Mixpanel-флага. Если SDK вернул fallback (флаг не загрузился, пользователя нет в охвате, сеть недоступна), метод возвращает `nil`.
+
+Показ эксперимента (`$experiment_started`) отправляет сам Mixpanel SDK в момент чтения варианта. Это событие не проходит через `log(e:)`, поэтому его нет в Firebase, Facebook и AppsFlyer.

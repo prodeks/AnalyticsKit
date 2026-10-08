@@ -96,6 +96,7 @@ import StoreKit
     /// - `paywalls.fetchPaywallsAndProducts()`
     /// - `purchases.verifySubscriptionIfNeeded()`
     /// - `remoteConfig.fetch()`
+    /// - Mixpanel feature flags, capped at 3 seconds so a slow flags response cannot hold the splash
     public var dataFetchComplete: (([UIApplication.LaunchOptionsKey: Any]?) -> Void)?
 
     // MARK: - Singleton
@@ -134,8 +135,9 @@ import StoreKit
                 async let paywallsTask: Void = self._paywalls.fetchPaywallsAndProducts()
                 async let subscriptionTask: Void = self._purchases.verifySubscriptionIfNeeded()
                 async let remoteConfigTask: Void = self._remoteConfig.fetch()
+                async let flagsTask: Void = self._analytics.awaitFeatureFlags(timeout: 3)
 
-                _ = await (paywallsTask, subscriptionTask, remoteConfigTask)
+                _ = await (paywallsTask, subscriptionTask, remoteConfigTask, flagsTask)
 
                 await MainActor.run {
                     self.dataFetchComplete?(options)

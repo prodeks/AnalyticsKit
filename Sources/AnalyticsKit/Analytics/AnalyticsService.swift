@@ -97,6 +97,14 @@ public protocol AnalyticsServiceProtocol: AnyObject {
     /// are requested. Adapty serves this file when the network is unavailable.
     func setPaywallFallback(fileURL: URL)
 
+    /// The assigned Mixpanel feature-flag variant key, or `nil` when the SDK has no assignment.
+    ///
+    /// `nil` covers a missing flag, a user outside the rollout, and a fetch that failed.
+    /// A returned key is a real assignment. Reading it is what makes the Mixpanel SDK send
+    /// `$experiment_started` for an experiment-backed flag. That event does not go through
+    /// ``log(e:)``.
+    func experimentVariant(for flagKey: String) async -> String?
+
     // MARK: Tracking
 
     /// Presents the ATT permission dialog and propagates the result to Adapty.
@@ -297,14 +305,61 @@ class AnalyticsService: NSObject, AnalyticsServiceProtocol {
     
     fileprivate func setupMixPanelIfNeeded() {
         if !didSetupMixPanel {
+            // prefetchFlags is false so the first fetch happens after identify(), under the
+            // Firebase uid the experiment assigns on. Persistence covers the next launch if
+            // that fetch is still in flight when onboarding asks for a variant.
             Mixpanel.initialize(
-                token: PurchasesAndAnalytics.Keys.mixPanelToken ?? "",
-                trackAutomaticEvents: false,
-                serverURL: "https://api-eu.mixpanel.com"
+                options: MixpanelOptions(
+                    token: PurchasesAndAnalytics.Keys.mixPanelToken ?? "",
+                    trackAutomaticEvents: false,
+                    serverURL: "https://api-eu.mixpanel.com",
+                    featureFlagOptions: FeatureFlagOptions(
+                        enabled: true,
+                        prefetchFlags: false,
+                        variantLookupPolicy: .persistenceUntilNetworkSuccess()
+                    )
+                )
             )
             Mixpanel.mainInstance().loggingEnabled = true
             didSetupMixPanel = true
         }
+    }
+
+    /// Waits for the in-flight Mixpanel flag fetch, but no longer than `timeout`.
+    ///
+    /// `identify` already starts a fetch when the distinct id changes. This joins that fetch
+    /// (or starts one) so onboarding can read a variant before the splash ends. A timeout
+    /// returns without a variant. The caller then treats the user as unassigned.
+    func awaitFeatureFlags(timeout: TimeInterval) async {
+        setupMixPanelIfNeeded()
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask {
+                await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                    Mixpanel.mainInstance().flags.loadFlags { _ in
+                        continuation.resume()
+                    }
+                }
+            }
+            group.addTask {
+                try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+            }
+            _ = await group.next()
+            group.cancelAll()
+        }
+    }
+
+    public func experimentVariant(for flagKey: String) async -> String? {
+        setupMixPanelIfNeeded()
+        let fallback = MixpanelFlagVariant(key: "")
+        let variant = await withCheckedContinuation { continuation in
+            Mixpanel.mainInstance().flags.getVariant(flagKey, fallback: fallback) { variant in
+                continuation.resume(returning: variant)
+            }
+        }
+        if case .fallback = variant.source {
+            return nil
+        }
+        return variant.key.isEmpty ? nil : variant.key
     }
     
     // MARK: - Startup identity
