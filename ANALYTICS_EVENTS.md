@@ -76,7 +76,7 @@
 | `purchased` | Была ли покупка при закрытии экрана (да/нет) |
 | `tap_source` | Для `PayWall_Lifetime_button_tap`: `option_select` или `purchase_button` |
 
-`PayWall_Lifetime_button_tap` is logged by `PaywallController` / Adapty Builder wrappers. Host custom paywalls call `didSelectProduct(_:previous:)`; `purchase(_:)` logs the checkout tap automatically. There is no `paywall_name` parameter — Adapty's paywall name is `paywall_id`.
+`PayWall_Lifetime_button_tap` is logged by `PaywallController`. Host custom paywalls call `didSelectProduct(_:previous:)`; `purchase(_:)` logs the checkout tap automatically. There is no `paywall_name` parameter — Adapty's paywall name is `paywall_id`.
 
 ### Параметры ошибок
 

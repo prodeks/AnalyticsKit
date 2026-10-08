@@ -8,7 +8,6 @@ import FirebaseAuth
 import AdSupport
 import UserNotifications
 import Adapty
-import AdaptyUI
 import FirebaseMessaging
 import Combine
 import AppsFlyerLib
@@ -154,7 +153,6 @@ public protocol AnalyticsServiceProtocol: AnyObject {
 /// | Adjust | Install attribution, SKAN conversion, deep links |
 /// | Mixpanel | Event logging with EU data residency |
 /// | Adapty | Subscription paywall config and entitlement management |
-/// | AdaptyUI | Paywall rendering layer on top of Adapty |
 ///
 /// ## Initialisation sequence
 ///
@@ -182,7 +180,6 @@ class AnalyticsService: NSObject, AnalyticsServiceProtocol {
 
     private let firebase = Analytics.self
     private let adapty = Adapty.self
-    private let adaptyUI = AdaptyUI.self
     private let appsflyer = AppsFlyerLib.shared()
     private let purchaseConnector = PurchaseConnector.shared()
 
@@ -356,7 +353,7 @@ class AnalyticsService: NSObject, AnalyticsServiceProtocol {
         return identity
     }
 
-    /// Activates Adapty and AdaptyUI, reporting whether Adapty is usable this session.
+    /// Activates Adapty, reporting whether Adapty is usable this session.
     ///
     /// Pass `nil` when no Firebase credential is cached, so Adapty activates **anonymously**
     /// instead of under the fallback ID. `Adapty.identify` merges an anonymous profile in
@@ -380,15 +377,9 @@ class AnalyticsService: NSObject, AnalyticsServiceProtocol {
             .with(ipAddressCollectionDisabled: isRunningInChina)
             .build()
 
-        let isActivated = await runSetupStep("adapty_activate") {
+        return await runSetupStep("adapty_activate") {
             try await adapty.activate(with: configuration)
         }
-        guard isActivated else { return false }
-
-        await runSetupStep("adapty_ui_activate") {
-            try await adaptyUI.activate()
-        }
-        return true
     }
 
     /// Resolves the final user identity and propagates it to every SDK.

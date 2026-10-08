@@ -26,7 +26,6 @@
 		BDD7840CC328D420131D9467 /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = D9A6C9C211F9ABAD70CCF0F6 /* FirebaseAnalytics */; };
 		BF276531883584E6DA2A27D5 /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = BE6FA5E6D9A0F16F4C285034 /* FirebaseMessaging */; };
 		CA38C904163DAEE0CAF0379D /* AppsFlyerLib-Dynamic in Frameworks */ = {isa = PBXBuildFile; productRef = 83FE83E5667BD99DDDA78809 /* AppsFlyerLib-Dynamic */; };
-		DB6E1FCD526CC35ECC39D74B /* AdaptyUI in Frameworks */ = {isa = PBXBuildFile; productRef = 8DEE0C9E6AD9EA8A794D851D /* AdaptyUI */; };
 		F609736EA5682AB46195DF76 /* Sentry in Frameworks */ = {isa = PBXBuildFile; productRef = 02312EA79B8E4E17A77576C6 /* Sentry */; };
 /* End PBXBuildFile section */
 
@@ -60,7 +59,6 @@
 				81A2AFF6BAFA450307B5ECB0 /* Lottie in Frameworks */,
 				8459FCCB30373552004683A2 /* Algorithms in Frameworks */,
 				6DF21395B1AFC4A34305D32D /* Adapty in Frameworks */,
-				DB6E1FCD526CC35ECC39D74B /* AdaptyUI in Frameworks */,
 				24E3E841EE7383080014DB90 /* PurchaseConnector-Dynamic in Frameworks */,
 				4E05F29B7C17B32DAE052D87 /* Mixpanel in Frameworks */,
 				7CD0673A33E287D3ED4CFA8A /* AdjustSdk in Frameworks */,
@@ -147,7 +145,6 @@
 				BE6FA5E6D9A0F16F4C285034 /* FirebaseMessaging */,
 				796618F1F46E172C7158A704 /* Lottie */,
 				413BA3C04A1D458F2ED6244B /* Adapty */,
-				8DEE0C9E6AD9EA8A794D851D /* AdaptyUI */,
 				0D99CE545ED77DE6E5C47ECF /* PurchaseConnector-Dynamic */,
 				BD1E13AAE6E5DA979954E8F9 /* Mixpanel */,
 				DA82D540C9B4A87DDC2A7D84 /* AdjustSdk */,
@@ -616,11 +613,6 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 8459FCDD30373614004683A2 /* XCRemoteSwiftPackageReference "SnapKit" */;
 			productName = SnapKit;
-		};
-		8DEE0C9E6AD9EA8A794D851D /* AdaptyUI */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = C6B2496C7D3D34BC107FD18E /* XCRemoteSwiftPackageReference "AdaptySDK-iOS" */;
-			productName = AdaptyUI;
 		};
 		A0E89A231DF14A9FF8374A75 /* FirebaseDatabase */ = {
 			isa = XCSwiftPackageProductDependency;

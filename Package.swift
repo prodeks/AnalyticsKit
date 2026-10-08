@@ -38,7 +38,6 @@ let package = Package(
                 .product(name: "AppsFlyerLib-Dynamic", package: "AppsFlyerFramework-Dynamic"),
                 .product(name: "Lottie", package: "lottie-ios"),
                 .product(name: "Adapty", package: "AdaptySDK-iOS"),
-                .product(name: "AdaptyUI", package: "AdaptySDK-iOS"),
                 .product(name: "PurchaseConnector-Dynamic", package: "PurchaseConnector-Dynamic"),
                 .product(name: "Mixpanel", package: "mixpanel-swift"),
                 .product(name: "AdjustSdk", package: "ios_sdk"),

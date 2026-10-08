@@ -1,5 +1,4 @@
 import UIKit
-import AdaptyUI
 import StoreKit
 import Adapty
 
@@ -24,26 +23,6 @@ public protocol PaywallControllerProtocol: UIViewController {
     func setFallbackPaywalls(url: URL)
 }
 
-enum PaywallData {
-    case customPaywall(CustomPaywallData)
-    case adaptyBuilder(AdaptyBuilderData)
-    
-    var placementID: String {
-        switch self {
-        case .customPaywall(let customPaywallData):
-            return customPaywallData.placement
-        case .adaptyBuilder(let adaptyBuilderData):
-            return adaptyBuilderData.placement
-        }
-    }
-}
-
-struct AdaptyBuilderData {
-    let placement: String
-    let adaptyPaywall: AdaptyPaywall
-    let configuration: AdaptyUI.PaywallConfiguration
-}
-
 struct CustomPaywallData {
     let placement: String
     let adaptyPaywall: AdaptyPaywall
@@ -58,7 +37,7 @@ class AdaptyPaywallService: PaywallServiceProtocol {
     
     public var uiFactory: ((PaywallIdentifier) -> PaywallViewProtocol?)?
     
-    var paywallData = [PaywallData]()
+    var paywallData = [CustomPaywallData]()
     
     let purchaseService: PurchaseService
     let analyticsService: AnalyticsService
@@ -76,61 +55,30 @@ class AdaptyPaywallService: PaywallServiceProtocol {
         Log.printLog(l: .debug, str: "Show paywall for placement: \(placement.identifier)")
         assert(uiFactory != nil)
         
-        if let paywallData = paywallData.first(where: { $0.placementID == placement.identifier }) {
-            switch paywallData {
-            case .customPaywall(let customPaywallData):
-                if let view = uiFactory?(customPaywallData.adaptyPaywall.name) {
-                    let context = PaywallPresentationContext(
-                        paywallID: view.paywallID.rawValue,
-                        placement: customPaywallData.placement,
-                        variationId: customPaywallData.adaptyPaywall.variationId,
-                        source: .adapty
-                    )
-                    let controller = PaywallController(
-                        purchaseService: purchaseService,
-                        paywallView: view,
-                        adaptyPaywallData: customPaywallData
-                    )
-                    controller.configureAnalytics(
-                        context: context,
-                        logEvent: analyticsService.log(e:)
-                    )
-                    return controller
-                } else {
-                    logPaywallFailed(
-                        placement: placement.identifier,
-                        metadata: PaywallAnalyticsError.customViewUnavailable
-                    )
-                    return nil
-                }
-            case .adaptyBuilder(let adaptyBuilderData):
-                do {
-                    let context = PaywallPresentationContext(
-                        paywallID: adaptyBuilderData.adaptyPaywall.name,
-                        placement: adaptyBuilderData.placement,
-                        variationId: adaptyBuilderData.adaptyPaywall.variationId,
-                        source: .adapty
-                    )
-                    let proxy = AdaptyPaywallControllerDelegateProxy()
-                    let adaptyController = try AdaptyUI.paywallController(
-                        with: adaptyBuilderData.configuration,
-                        delegate: proxy
-                    )
-                    return AdaptyPaywallControllerWrapper(
-                        wrappedController: adaptyController,
-                        purchaseService: purchaseService,
-                        analyticsService: analyticsService,
-                        placement: adaptyBuilderData.placement,
-                        proxy: proxy,
-                        presentationContext: context
-                    )
-                } catch {
-                    logPaywallFailed(
-                        placement: placement.identifier,
-                        metadata: AnalyticsErrorMetadata(error: error)
-                    )
-                    return nil
-                }
+        if let customPaywallData = paywallData.first(where: { $0.placement == placement.identifier }) {
+            if let view = uiFactory?(customPaywallData.adaptyPaywall.name) {
+                let context = PaywallPresentationContext(
+                    paywallID: view.paywallID.rawValue,
+                    placement: customPaywallData.placement,
+                    variationId: customPaywallData.adaptyPaywall.variationId,
+                    source: .adapty
+                )
+                let controller = PaywallController(
+                    purchaseService: purchaseService,
+                    paywallView: view,
+                    adaptyPaywallData: customPaywallData
+                )
+                controller.configureAnalytics(
+                    context: context,
+                    logEvent: analyticsService.log(e:)
+                )
+                return controller
+            } else {
+                logPaywallFailed(
+                    placement: placement.identifier,
+                    metadata: PaywallAnalyticsError.customViewUnavailable
+                )
+                return nil
             }
         } else {
             logPaywallFailed(
@@ -143,42 +91,29 @@ class AdaptyPaywallService: PaywallServiceProtocol {
     
     func fetchPaywallsAndProducts() async {
         let paywalls = await placements
-            .asyncMap { identifier -> PaywallData? in
+            .asyncMap { identifier -> CustomPaywallData? in
                 do {
                     let paywall = try await Adapty.getPaywall(placementId: identifier)
-                    if paywall.hasViewConfiguration {
-                        let config = try await AdaptyUI.getPaywallConfiguration(forPaywall: paywall)
-                        return .adaptyBuilder(
-                            AdaptyBuilderData(
+                    let products: [AdaptyPaywallProduct]
+                    do {
+                        products = try await Adapty.getPaywallProducts(paywall: paywall)
+                    } catch {
+                        self.logPricesFailed(metadata: AnalyticsErrorMetadata(error: error))
+                        self.analyticsService.log(
+                            e: PaywallFetchErrorEvent(
+                                source: .adapty,
                                 placement: identifier,
-                                adaptyPaywall: paywall,
-                                configuration: config
+                                error: error
                             )
                         )
-                    } else {
-                        let products: [AdaptyPaywallProduct]
-                        do {
-                            products = try await Adapty.getPaywallProducts(paywall: paywall)
-                        } catch {
-                            self.logPricesFailed(metadata: AnalyticsErrorMetadata(error: error))
-                            self.analyticsService.log(
-                                e: PaywallFetchErrorEvent(
-                                    source: .adapty,
-                                    placement: identifier,
-                                    error: error
-                                )
-                            )
-                            return nil
-                        }
-                        
-                        return .customPaywall(
-                            CustomPaywallData(
-                                placement: identifier,
-                                adaptyPaywall: paywall,
-                                products: products
-                            )
-                        )
+                        return nil
                     }
+                    
+                    return CustomPaywallData(
+                        placement: identifier,
+                        adaptyPaywall: paywall,
+                        products: products
+                    )
                 } catch {
                     Log.printLog(
                         l: .error,

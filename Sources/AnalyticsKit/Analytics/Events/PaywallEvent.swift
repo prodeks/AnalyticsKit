@@ -516,7 +516,7 @@ public class PaywallCheckoutStartedEvent: PaywallEvent {
         }
     }
 
-    /// Shared Lifetime-demand logging used by `PaywallController` and Adapty Builder paywalls.
+    /// Shared Lifetime-demand logging used by `PaywallController`.
     public enum PaywallLifetimeAnalytics {
         public static func logSelection(
             _ iap: any IAPProtocol,
