@@ -14,7 +14,7 @@ let package = Package(
         .package(url: "https://github.com/airbnb/lottie-ios.git", exact: Version(4, 5, 1)),
         .package(url: "https://github.com/adaptyteam/AdaptySDK-iOS.git", exact: Version(3, 15, 7)),
         .package(url: "https://github.com/AppsFlyerSDK/PurchaseConnector-Dynamic", exact: .init(6, 15, 3)),
-        .package(url: "https://github.com/mixpanel/mixpanel-swift.git", exact: .init(5, 0, 0)),
+        .package(url: "https://github.com/mixpanel/mixpanel-swift.git", exact: .init(6, 8, 0)),
         .package(url: "https://github.com/adjust/ios_sdk", exact: .init(5, 5, 0)),
         .package(url: "https://github.com/getsentry/sentry-cocoa.git", exact: .init(9, 16, 1)),
         .package(url: "https://github.com/apple/swift-algorithms.git", exact: .init(1, 2, 1)),

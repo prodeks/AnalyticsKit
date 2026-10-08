@@ -519,7 +519,7 @@
 			repositoryURL = "https://github.com/mixpanel/mixpanel-swift.git";
 			requirement = {
 				kind = exactVersion;
-				version = 5.0.0;
+				version = 6.8.0;
 			};
 		};
 		91612C71DBC5C8A647ADE58D /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {

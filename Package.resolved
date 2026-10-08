@@ -145,6 +145,15 @@
       }
     },
     {
+      "identity" : "json-logic-swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/advantagefse/json-logic-swift",
+      "state" : {
+        "revision" : "9088eed1b26937fe13d248aa24d7632a51be28e2",
+        "version" : "1.2.4"
+      }
+    },
+    {
       "identity" : "leveldb",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/firebase/leveldb.git",
@@ -167,8 +176,17 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/mixpanel/mixpanel-swift.git",
       "state" : {
-        "revision" : "e2619282894502f9378abe04c7f7d92fc523484a",
-        "version" : "5.0.0"
+        "revision" : "3ca6df40d42864843c02f218d378c2bfb8111407",
+        "version" : "6.8.0"
+      }
+    },
+    {
+      "identity" : "mixpanel-swift-common",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/mixpanel/mixpanel-swift-common.git",
+      "state" : {
+        "revision" : "72626df0ef90df6a27c2c3624197b70dbcc618ed",
+        "version" : "1.1.0"
       }
     },
     {
