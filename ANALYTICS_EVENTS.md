@@ -28,10 +28,12 @@
 
 | Событие | Когда срабатывает |
 |---|---|
-| `sale_confirmation_success` | Оплата прошла (сюда же уходит выручка в Facebook). С 1.6.1 несёт `placement_id`, `paywall_id`, `variation_id`, `presentation_id` |
+| `sale_confirmation_success` | Оплата прошла (сюда же уходит выручка в Facebook) |
 | `sale_confirmation_cancel` | Пользователь отменил оплату |
 | `sale_confirmation_fail` | Ошибка при оплате |
 | `sale_confirmation_restore` | Пользователь восстановил подписку |
+
+С 1.6.2 все четыре события несут `placement_id`, `paywall_id`, `variation_id` и `presentation_id` (у `sale_confirmation_success` они есть с 1.6.1). У `sale_confirmation_restore` эти поля есть только при восстановлении с пейвола. Восстановление из настроек отправляет только `purchase_service`.
 
 ### Пример успешной покупки
 

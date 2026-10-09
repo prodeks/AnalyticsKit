@@ -240,16 +240,7 @@ enum PaywallEventLogger {
 
     static func purchaseCancelled(_ context: PaywallCheckoutContext, log: (EventProtocol) -> Void) {
         let metadata = PaywallFailureMetadata.cancelled
-        log(
-            PurchaseEvent.cancel(
-                source: context.source,
-                iap: (
-                    context.productID,
-                    context.price,
-                    context.currency
-                )
-            )
-        )
+        log(PurchaseEvent.cancel(context))
         log(
             PaywallCheckoutCancelledEvent(
                 paywallID: context.paywallID,
@@ -295,7 +286,7 @@ enum PaywallEventLogger {
             description: description,
             value: value
         )
-        log(PurchaseEvent.fail(source: context.source, payload))
+        log(PurchaseEvent.fail(context, payload))
         log(
             PurchaseFailedEvent(
                 reason: reason,
@@ -320,7 +311,7 @@ enum PaywallEventLogger {
         log: (EventProtocol) -> Void
     ) {
         let payload = PurchaseFailurePayload(adaptyError: error, productID: context.productID)
-        log(PurchaseEvent.fail(source: context.source, payload))
+        log(PurchaseEvent.fail(context, payload))
         log(
             PurchaseFailedEvent(
                 reason: reason,
@@ -338,8 +329,12 @@ enum PaywallEventLogger {
         )
     }
 
-    static func restoreSucceeded(source: PaywallSource, log: (EventProtocol) -> Void) {
-        log(PurchaseEvent.restore(source: source))
+    static func restoreSucceeded(
+        source: PaywallSource,
+        paywall: PaywallAnalyticsContext?,
+        log: (EventProtocol) -> Void
+    ) {
+        log(PurchaseEvent.restore(source: source, paywall: paywall))
     }
 
     static func restoreFailed(

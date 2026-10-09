@@ -25,6 +25,16 @@ public struct PaywallAnalyticsContext {
         self.purchaseService = purchaseService
     }
 
+    init(_ context: PaywallCheckoutContext) {
+        self.init(
+            paywallID: context.paywallID,
+            placementID: context.placement,
+            variationID: context.variationId,
+            presentationID: context.presentationID,
+            purchaseService: context.source.analyticsValue
+        )
+    }
+
     init(_ context: PaywallPresentationContext) {
         self.init(
             paywallID: context.paywallID,

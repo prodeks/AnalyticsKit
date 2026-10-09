@@ -77,22 +77,23 @@ enum PurchaseEvent: EventProtocol {
 
     /// The user cancelled the purchase dialog before payment was authorised.
     ///
-    /// - Parameter iap: A tuple of `(productID, price, currency)`. Price and currency are
-    ///   preserved so cancelled checkout funnels can be valued the same way as completions.
-    case cancel(source: PaywallSource, iap: (String, Float, String))
+    /// Price and currency are preserved so cancelled checkout funnels can be valued the
+    /// same way as completions.
+    case cancel(PaywallCheckoutContext)
 
     /// The purchase failed due to an Adapty or StoreKit error.
     ///
     /// The payload keeps the legacy string value while also exposing structured error
     /// fields that work across Adapty and StoreKit.
-    case fail(source: PaywallSource, PurchaseFailurePayload)
+    case fail(PaywallCheckoutContext, PurchaseFailurePayload)
 
     /// A restore-purchases operation completed.
     ///
     /// No product-level payload is attached because a restore may affect multiple
     /// products simultaneously and the authoritative state is derived from the profile
-    /// returned by `Adapty.restorePurchases()`.
-    case restore(source: PaywallSource)
+    /// returned by `Adapty.restorePurchases()`. `paywall` is `nil` when the restore was
+    /// not started from a paywall (for example from Settings).
+    case restore(source: PaywallSource, paywall: PaywallAnalyticsContext?)
 
     // MARK: - EventProtocol
 
@@ -107,45 +108,26 @@ enum PurchaseEvent: EventProtocol {
 
     var params: [String: Any] {
         switch self {
-        case .success(let context):
-            var result: [String: Any] = [
-                "purchase_service": context.source.analyticsValue,
+        case .success(let context), .cancel(let context):
+            return PaywallAnalyticsContext(context).analyticsParams.merging([
                 "product_id": context.productID,
                 AnalyticsParameterValue: context.price,
-                "currency": context.currency,
-                "placement_id": context.placement,
-                "paywall_id": context.paywallID
-            ]
-            if let variationId = context.variationId {
-                result["variation_id"] = variationId
-            }
-            if let presentationID = context.presentationID {
-                result["presentation_id"] = presentationID
-            }
-            return result
+                "currency": context.currency
+            ]) { _, new in new }
 
-        case .cancel(let source, let iap):
-            return [
-                "purchase_service": source.analyticsValue,
-                "product_id": iap.0,
-                AnalyticsParameterValue: iap.1,
-                "currency": iap.2
-            ]
-
-        case .fail(let source, let payload):
-            return [
-                "purchase_service": source.analyticsValue,
+        case .fail(let context, let payload):
+            return PaywallAnalyticsContext(context).analyticsParams.merging([
                 "product_id": payload.productID,
                 AnalyticsParameterValue: payload.value,
                 "error_domain": payload.errorDomain,
                 "error_code": payload.errorCode,
                 "error_description": payload.errorDescription
-            ]
+            ]) { _, new in new }
 
-        case .restore(let source):
-            return [
-                "purchase_service": source.analyticsValue
-            ]
+        case .restore(let source, let paywall):
+            var result = paywall?.analyticsParams ?? [:]
+            result["purchase_service"] = source.analyticsValue
+            return result
         }
     }
 }

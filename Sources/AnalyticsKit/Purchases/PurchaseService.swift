@@ -142,9 +142,15 @@ class PurchaseService: @preconcurrency PurchaseServiceProtocol {
         restore(source: .adapty, completion)
     }
 
+    /// - Parameter paywall: The paywall the user restored from, attached to
+    ///   `sale_confirmation_restore`. `nil` for restores started outside a paywall.
     @MainActor
-    public func restore(source: PaywallSource, _ completion: @escaping (Bool) -> Void) {
-        restorePurchasesWithAdapty(source: source, completion: completion)
+    public func restore(
+        source: PaywallSource,
+        paywall: PaywallAnalyticsContext? = nil,
+        _ completion: @escaping (Bool) -> Void
+    ) {
+        restorePurchasesWithAdapty(source: source, paywall: paywall, completion: completion)
     }
 
     /// Calls `Adapty.restorePurchases()` and merges the result with an optional
@@ -156,6 +162,7 @@ class PurchaseService: @preconcurrency PurchaseServiceProtocol {
     ///   - completion: Optional callback with `true` when an active sub is found.
     private func restorePurchasesWithAdapty(
         source: PaywallSource,
+        paywall: PaywallAnalyticsContext? = nil,
         storeKitStatus: SubscriptionStatus? = nil,
         completion: ((Bool) -> Void)? = nil
     ) {
@@ -164,7 +171,7 @@ class PurchaseService: @preconcurrency PurchaseServiceProtocol {
             case .success(let profile):
                 let status = self?.updateSubscriptionState(from: profile) ?? .inactive
                 if let logEvent = self?.logEvent {
-                    PaywallEventLogger.restoreSucceeded(source: source, log: logEvent)
+                    PaywallEventLogger.restoreSucceeded(source: source, paywall: paywall, log: logEvent)
                 }
                 completion?(status.isSubActive)
             case .failure(let error):

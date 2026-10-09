@@ -111,7 +111,7 @@ public class PaywallController: UIViewController, PaywallViewDelegateProtocol, U
     
     public func restore() {
         overlayView.isHidden = false
-        purchaseService.restore(source: .adapty) { [weak self] restored in
+        purchaseService.restore(source: .adapty, paywall: paywallAnalyticsContext) { [weak self] restored in
             self?.overlayView.isHidden = true
             if restored {
                 self?.dismiss()
