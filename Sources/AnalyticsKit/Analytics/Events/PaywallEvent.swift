@@ -235,16 +235,7 @@ enum PaywallEventLogger {
     }
 
     static func purchaseSucceeded(_ context: PaywallCheckoutContext, log: (EventProtocol) -> Void) {
-        log(
-            PurchaseEvent.success(
-                source: context.source,
-                iap: (
-                    context.productID,
-                    context.price,
-                    context.currency
-                )
-            )
-        )
+        log(PurchaseEvent.success(context))
     }
 
     static func purchaseCancelled(_ context: PaywallCheckoutContext, log: (EventProtocol) -> Void) {

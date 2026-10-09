@@ -71,9 +71,9 @@ enum PurchaseEvent: EventProtocol {
 
     /// The purchase completed successfully.
     ///
-    /// - Parameter iap: A tuple of `(productID, price, currency)`. The price and currency
-    ///   are used by `AnalyticsService` to log revenue to Facebook.
-    case success(source: PaywallSource, iap: (String, Float, String))
+    /// The context's price and currency are used by `AnalyticsService` to log revenue
+    /// to Facebook.
+    case success(PaywallCheckoutContext)
 
     /// The user cancelled the purchase dialog before payment was authorised.
     ///
@@ -107,13 +107,22 @@ enum PurchaseEvent: EventProtocol {
 
     var params: [String: Any] {
         switch self {
-        case .success(let source, let iap):
-            return [
-                "purchase_service": source.analyticsValue,
-                "product_id": iap.0,
-                AnalyticsParameterValue: iap.1,
-                "currency": iap.2
+        case .success(let context):
+            var result: [String: Any] = [
+                "purchase_service": context.source.analyticsValue,
+                "product_id": context.productID,
+                AnalyticsParameterValue: context.price,
+                "currency": context.currency,
+                "placement_id": context.placement,
+                "paywall_id": context.paywallID
             ]
+            if let variationId = context.variationId {
+                result["variation_id"] = variationId
+            }
+            if let presentationID = context.presentationID {
+                result["presentation_id"] = presentationID
+            }
+            return result
 
         case .cancel(let source, let iap):
             return [

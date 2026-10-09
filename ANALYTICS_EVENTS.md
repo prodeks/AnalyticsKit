@@ -28,7 +28,7 @@
 
 | Событие | Когда срабатывает |
 |---|---|
-| `sale_confirmation_success` | Оплата прошла (сюда же уходит выручка в Facebook) |
+| `sale_confirmation_success` | Оплата прошла (сюда же уходит выручка в Facebook). С 1.6.1 несёт `placement_id`, `paywall_id`, `variation_id`, `presentation_id` |
 | `sale_confirmation_cancel` | Пользователь отменил оплату |
 | `sale_confirmation_fail` | Ошибка при оплате |
 | `sale_confirmation_restore` | Пользователь восстановил подписку |
