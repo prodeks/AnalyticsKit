@@ -147,8 +147,8 @@ public final class AdjustInstallGate {
                 guard let self else { return false }
                 return await self.fetchASAAttributionWithRetry(token: token)
             }
-            group.addTask { [sleep] in
-                await sleep(totalTimeout)
+            group.addTask {
+                try? await Task.sleep(nanoseconds: UInt64(max(0, totalTimeout) * 1_000_000_000))
                 return false
             }
 
