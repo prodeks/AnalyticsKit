@@ -225,6 +225,8 @@ class AnalyticsService: NSObject, AnalyticsServiceProtocol {
     
     private var didSetupMixPanel = false
     private let fallbackCustomerUserIDKey = "com.aweb.analytics.fallback_customer_user_id"
+    private let adjustInstallGate = AdjustInstallGate()
+    private(set) var isAdjustActive = false
 
     // MARK: - App lifecycle
 
@@ -470,10 +472,13 @@ class AnalyticsService: NSObject, AnalyticsServiceProtocol {
             await applyUserIdentity(identity)
         }
 
-        guard isAdaptyActivated else { return }
-
         // Nothing else waits on these, so they stay off the paywall prefetch's critical path.
-        adaptyIntegrationSetup = Task { await self.setUpAdaptyIntegrations() }
+        adaptyIntegrationSetup = Task {
+            if isAdaptyActivated {
+                await self.setUpAdaptyIntegrations()
+            }
+            await self.startAdjustIfEligible()
+        }
     }
 
     /// Adapty configuration that depends on the final identity but that no other startup step
@@ -557,6 +562,28 @@ class AnalyticsService: NSObject, AnalyticsServiceProtocol {
 
     // MARK: - Adjust initialisation
 
+    func startAdjustIfEligible() async {
+        guard PurchasesAndAnalytics.Keys.adjustInstallGateEnabled else {
+            return
+        }
+        guard !isAdjustActive else {
+            return
+        }
+        let shouldStart = await adjustInstallGate.shouldStartAdjust(
+            isFreshInstall: PurchasesAndAnalytics.Keys.isFreshInstall
+        )
+        guard shouldStart else {
+            Log.printLog(
+                l: .debug,
+                str: "Adjust skipped by install gate (state: \(adjustInstallGate.storedState?.rawValue ?? "nil"))"
+            )
+            return
+        }
+        await MainActor.run {
+            self.initAdjust()
+        }
+    }
+
     /// Initialises the Adjust SDK with environment-appropriate settings and forwards
     /// the resolved attribution and device ID to Adapty.
     ///
@@ -582,10 +609,30 @@ class AnalyticsService: NSObject, AnalyticsServiceProtocol {
         adjustConfig?.delegate = self
 #endif
 
+        if PurchasesAndAnalytics.Keys.adjustInstallGateEnabled {
+            adjustConfig?.disableAdServices()
+        }
+
+        isAdjustActive = true
         Adjust.initSdk(adjustConfig)
 
         Task {
-            let (adid, attribution) = await (Adjust.adid(), Adjust.attribution()?.dictionary())
+            let (adid, rawAttribution) = await (Adjust.adid(), Adjust.attribution())
+            if PurchasesAndAnalytics.Keys.adjustInstallGateEnabled,
+               let rawAttribution,
+               !self.adjustInstallGate.handleAttribution(
+                   network: rawAttribution.network,
+                   trackerName: rawAttribution.trackerName
+               ) {
+                Log.printLog(
+                    l: .debug,
+                    str: "Adjust disabled by install gate (network: \(rawAttribution.network ?? "nil"))"
+                )
+                Adjust.disable()
+                self.isAdjustActive = false
+                return
+            }
+            let attribution = rawAttribution?.dictionary()
             do {
                 if let adid {
                     try await Adapty.setIntegrationIdentifier(key: "adjust_device_id", value: adid)
@@ -679,10 +726,11 @@ class AnalyticsService: NSObject, AnalyticsServiceProtocol {
         options: [UIApplication.OpenURLOptionsKey: Any]
     ) -> Bool {
         // Forward to Adjust for URL-scheme attribution tracking
-        if let adjustDeeplink = ADJDeeplink(deeplink: url) {
+        if !PurchasesAndAnalytics.Keys.adjustInstallGateEnabled || isAdjustActive,
+           let adjustDeeplink = ADJDeeplink(deeplink: url) {
             Adjust.processDeeplink(adjustDeeplink)
+            Log.printLog(l: .debug, str: "Adjust URL scheme deep link processed: \(url.absoluteString)")
         }
-        Log.printLog(l: .debug, str: "Adjust URL scheme deep link processed: \(url.absoluteString)")
 
         // Store the raw URL so the app coordinator can route the deep link
         _attributionData = [PurchasesAndAnalytics.Keys.adjustDeeplinkKey: url.absoluteString]
@@ -753,8 +801,10 @@ class AnalyticsService: NSObject, AnalyticsServiceProtocol {
            let url = userActivity.webpageURL {
 
             if let adjustDeeplink = ADJDeeplink(deeplink: url) {
-                Adjust.processDeeplink(adjustDeeplink)
-                Log.printLog(l: .debug, str: "Adjust Universal Link processed: \(url.absoluteString)")
+                if !PurchasesAndAnalytics.Keys.adjustInstallGateEnabled || isAdjustActive {
+                    Adjust.processDeeplink(adjustDeeplink)
+                    Log.printLog(l: .debug, str: "Adjust Universal Link processed: \(url.absoluteString)")
+                }
 
                 _attributionData = [PurchasesAndAnalytics.Keys.adjustDeeplinkKey: url.absoluteString]
             }
@@ -1049,6 +1099,21 @@ extension AnalyticsService: AdjustDelegate {
         Log.printLog(l: .debug, str: "Adjust attribution changed: \(String(describing: attribution))")
 
         guard let attribution else { return }
+
+        if PurchasesAndAnalytics.Keys.adjustInstallGateEnabled {
+            guard adjustInstallGate.handleAttribution(
+                network: attribution.network,
+                trackerName: attribution.trackerName
+            ) else {
+                Log.printLog(
+                    l: .debug,
+                    str: "Adjust disabled by install gate (network: \(attribution.network ?? "nil"))"
+                )
+                Adjust.disable()
+                isAdjustActive = false
+                return
+            }
+        }
 
         var attributionDict: [AnyHashable: Any] = [:]
 
