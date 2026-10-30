@@ -159,7 +159,7 @@ public protocol AnalyticsServiceProtocol: AnyObject {
 /// | Facebook SDK | Event logging and purchase revenue reporting |
 /// | AppsFlyer | Install attribution and event logging |
 /// | Adjust | Install attribution, SKAN conversion, deep links |
-/// | Mixpanel | Event logging with EU data residency |
+/// | Mixpanel | Event logging; region from `Keys.mixPanelRegion` (EU by default) |
 /// | Adapty | Subscription paywall config and entitlement management |
 ///
 /// ## Initialisation sequence
@@ -252,7 +252,6 @@ class AnalyticsService: NSObject, AnalyticsServiceProtocol {
 
             FirebaseApp.configure()
 
-            // Mixpanel — EU endpoint used for GDPR compliance.
             setupMixPanelIfNeeded()
             Messaging.messaging().delegate = self
             didSetupAnalytics = true
@@ -314,7 +313,7 @@ class AnalyticsService: NSObject, AnalyticsServiceProtocol {
                 options: MixpanelOptions(
                     token: PurchasesAndAnalytics.Keys.mixPanelToken ?? "",
                     trackAutomaticEvents: false,
-                    serverURL: "https://api-eu.mixpanel.com",
+                    serverURL: PurchasesAndAnalytics.Keys.mixPanelRegion.serverURL,
                     featureFlagOptions: FeatureFlagOptions(
                         enabled: true,
                         prefetchFlags: false,

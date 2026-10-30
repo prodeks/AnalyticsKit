@@ -46,6 +46,7 @@ The script checks the exact toolchain: Xcode 26.6 (build 17F109) and Swift 6.3.3
 
 - Dependencies in `Package.swift` use exact versions. Keep that style when you add or bump one.
 - Public API is the contract with the host apps. Do not change a `public` signature without a reason. Keep internal types `internal`.
+- Each host app sets `Keys.mixPanelRegion` to the data residency of its Mixpanel project. The default is `.eu`. A token sent to the wrong region gets HTTP 200 and the events are dropped.
 - Use `Task.sleep` for timeouts in async code (see `AdjustInstallGate`). Inject the clock, token provider and HTTP client so the code stays testable.
 - Commit messages are short, in the imperative, and have no prefix (for example "Add placement to all sale_confirmation events").
 - Do not commit `.build/`, `build/`, `xcuserdata/` or `.netrc`. They are in `.gitignore`.
