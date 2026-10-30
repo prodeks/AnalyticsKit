@@ -86,20 +86,33 @@ public final class AdjustInstallGate {
     /// Evaluates Adjust attribution and updates persisted gate state.
     /// Returns `true` when Adjust should remain active, `false` when it should be disabled.
     @discardableResult
-    public func handleAttribution(network: String?, trackerName: String? = nil) -> Bool {
-        let keepEnabled = Self.shouldKeepAdjustEnabled(network: network, trackerName: trackerName)
+    public func handleAttribution(network: String?, trackerName: String? = nil, trackerToken: String? = nil) -> Bool {
+        let keepEnabled = Self.shouldKeepAdjustEnabled(
+            network: network,
+            trackerName: trackerName,
+            trackerToken: trackerToken
+        )
         setStoredState(keepEnabled ? .active : .disabled)
         return keepEnabled
     }
 
-    /// Returns `false` when attribution network is `"Organic"` or `"Apple Search Ads"` (case-insensitive, trimmed).
-    public static func shouldKeepAdjustEnabled(network: String?, trackerName: String? = nil) -> Bool {
+    /// Returns `false` when the install did not come from an Adjust link: network `"Organic"`,
+    /// `"Apple Search Ads"` or `"No User Consent"` (case-insensitive, trimmed), or tracker token `"unattr"`.
+    /// Adjust returns `"No User Consent"` / `"unattr"` when it cannot attribute an install without ATT consent.
+    public static func shouldKeepAdjustEnabled(
+        network: String?,
+        trackerName: String? = nil,
+        trackerToken: String? = nil
+    ) -> Bool {
+        if normalizedSource(trackerToken) == "unattr" {
+            return false
+        }
         let candidate = normalizedSource(network) ?? normalizedSource(trackerName)
         guard let candidate else {
             return true
         }
         switch candidate {
-        case "organic", "apple search ads":
+        case "organic", "apple search ads", "no user consent":
             return false
         default:
             return true

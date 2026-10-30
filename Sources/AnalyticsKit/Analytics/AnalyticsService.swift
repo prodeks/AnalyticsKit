@@ -621,11 +621,12 @@ class AnalyticsService: NSObject, AnalyticsServiceProtocol {
                let rawAttribution,
                !self.adjustInstallGate.handleAttribution(
                    network: rawAttribution.network,
-                   trackerName: rawAttribution.trackerName
+                   trackerName: rawAttribution.trackerName,
+                   trackerToken: rawAttribution.trackerToken
                ) {
                 Log.printLog(
                     l: .debug,
-                    str: "Adjust disabled by install gate (network: \(rawAttribution.network ?? "nil"))"
+                    str: "Adjust disabled by install gate (network: \(rawAttribution.network ?? "nil"), tracker: \(rawAttribution.trackerToken ?? "nil"))"
                 )
                 Adjust.disable()
                 self.isAdjustActive = false
@@ -1102,11 +1103,12 @@ extension AnalyticsService: AdjustDelegate {
         if PurchasesAndAnalytics.Keys.adjustInstallGateEnabled {
             guard adjustInstallGate.handleAttribution(
                 network: attribution.network,
-                trackerName: attribution.trackerName
+                trackerName: attribution.trackerName,
+                trackerToken: attribution.trackerToken
             ) else {
                 Log.printLog(
                     l: .debug,
-                    str: "Adjust disabled by install gate (network: \(attribution.network ?? "nil"))"
+                    str: "Adjust disabled by install gate (network: \(attribution.network ?? "nil"), tracker: \(attribution.trackerToken ?? "nil"))"
                 )
                 Adjust.disable()
                 isAdjustActive = false
