@@ -8,7 +8,7 @@ Swift package (iOS 16+, swift-tools 5.9) that gives the aweb apps one entry poin
 - `Analytics/` - `AnalyticsService` (fan-out to Firebase, Facebook, AppsFlyer, Mixpanel, Adjust) and `AdjustInstallGate`.
 - `Analytics/Events/` - event types. Each event conforms to `EventProtocol` (`name`, `params`).
 - `Purchases/` - `PurchaseService`, the Adapty and StoreKit paths, subscription status.
-- `Paywalls/` - `AdaptyPaywallService` and the paywall UI (`PaywallController`, `WebViewController`).
+- `Paywalls/` - `AdaptyPaywallService` and the paywall UI (`PaywallController`, `WebViewController`). `AdaptyFlowService` shows Adapty Flows. AdaptyUI renders a flow and runs its purchases; `FlowDelegate` records the results through `PurchaseService`.
 - `RemoteConfig.swift`, `Keys.swift`, `Log.swift`, `Strings.swift`, `Extensions.swift` - shared support code.
 - `Scripts/build-xcframework.sh` - builds the xcframework.
 - `ANALYTICS_EVENTS.md` (Russian) - event list for the analytics team.
@@ -46,6 +46,7 @@ The script checks the exact toolchain: Xcode 26.6 (build 17F109) and Swift 6.3.3
 
 - Dependencies in `Package.swift` use exact versions. Keep that style when you add or bump one.
 - Public API is the contract with the host apps. Do not change a `public` signature without a reason. Keep internal types `internal`.
+- Firebase is optional: without `GoogleService-Info.plist` the package skips it. Guard every new Firebase call with `FirebaseApp.app() != nil`.
 - Each host app sets `Keys.mixPanelRegion` to the data residency of its Mixpanel project. The default is `.eu`. A token sent to the wrong region gets HTTP 200 and the events are dropped.
 - Use `Task.sleep` for timeouts in async code (see `AdjustInstallGate`). Inject the clock, token provider and HTTP client so the code stays testable.
 - Commit messages are short, in the imperative, and have no prefix (for example "Add placement to all sale_confirmation events").

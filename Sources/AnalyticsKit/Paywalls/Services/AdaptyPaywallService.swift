@@ -25,7 +25,8 @@ public protocol PaywallControllerProtocol: UIViewController {
 
 struct CustomPaywallData {
     let placement: String
-    let adaptyPaywall: AdaptyPaywall
+    let adaptyFlow: AdaptyFlow
+    let adaptyPaywall: AdaptyFlowPaywall
     let products: [AdaptyPaywallProduct]
 }
 
@@ -93,7 +94,11 @@ class AdaptyPaywallService: PaywallServiceProtocol {
         let paywalls = await placements
             .asyncMap { identifier -> CustomPaywallData? in
                 do {
-                    let paywall = try await Adapty.getPaywall(placementId: identifier)
+                    let flow = try await Adapty.getFlow(placementId: identifier)
+                    guard let paywall = flow.paywalls.first else {
+                        Log.printLog(l: .error, str: "Flow for placement \(identifier) has no paywalls")
+                        return nil
+                    }
                     let products: [AdaptyPaywallProduct]
                     do {
                         products = try await Adapty.getPaywallProducts(paywall: paywall)
@@ -111,6 +116,7 @@ class AdaptyPaywallService: PaywallServiceProtocol {
                     
                     return CustomPaywallData(
                         placement: identifier,
+                        adaptyFlow: flow,
                         adaptyPaywall: paywall,
                         products: products
                     )

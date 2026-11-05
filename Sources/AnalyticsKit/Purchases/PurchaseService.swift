@@ -75,11 +75,31 @@ class PurchaseService: @preconcurrency PurchaseServiceProtocol {
         variationId: String? = nil,
         _ completion: @escaping (PurchaseResult) -> Void
     ) {
-        let productContext = AdaptyProductContext(product: product)
+        let checkoutContext = startCheckout(
+            product,
+            paywallID: paywallID,
+            placement: placement,
+            presentationID: presentationID,
+            variationId: variationId
+        )
+
+        adaptyService.makePurchase(product: product) { [weak self] purchaseResult in
+            self?.finishCheckout(purchaseResult, checkoutContext: checkoutContext, completion: completion)
+        }
+    }
+
+    /// Logs the checkout start. Flows call this directly, because AdaptyUI makes the purchase.
+    func startCheckout(
+        _ product: AdaptyPaywallProduct,
+        paywallID: String,
+        placement: String,
+        presentationID: String?,
+        variationId: String?
+    ) -> PaywallCheckoutContext {
         let checkoutContext = PaywallCheckoutContext(
             paywallID: paywallID,
             placement: placement,
-            product: productContext,
+            product: AdaptyProductContext(product: product),
             variationId: variationId,
             presentationID: presentationID,
             source: .adapty
@@ -88,39 +108,43 @@ class PurchaseService: @preconcurrency PurchaseServiceProtocol {
         if let logEvent {
             PaywallEventLogger.checkoutStarted(checkoutContext, log: logEvent)
         }
+        return checkoutContext
+    }
 
-        adaptyService.makePurchase(product: product) { [weak self] purchaseResult in
-            guard let self else { return }
-
-            switch purchaseResult {
-            case .success(let result):
-                if result.isPurchaseCancelled {
-                    self.handlePurchaseCancelled(
-                        checkoutContext: checkoutContext,
-                        completion: completion
-                    )
-                } else if result.isPurchasePending {
-                    Log.printLog(
-                        l: .error,
-                        str: "Unexpected pending Adapty purchase for product \(product.vendorProductId) on placement \(placement)"
-                    )
-                    completion(.fail)
-                } else {
-                    if let profile = result.profile {
-                        self.updateSubscriptionState(from: profile)
-                    }
-                    if let logEvent = self.logEvent {
-                        PaywallEventLogger.purchaseSucceeded(checkoutContext, log: logEvent)
-                    }
-                    completion(.success)
-                }
-            case .failure(let error):
-                self.handlePurchaseFailure(
-                    error: error,
+    /// Updates the subscription state and logs the checkout result.
+    func finishCheckout(
+        _ purchaseResult: Result<AdaptyPurchaseResult, AdaptyError>,
+        checkoutContext: PaywallCheckoutContext,
+        completion: @escaping (PurchaseResult) -> Void
+    ) {
+        switch purchaseResult {
+        case .success(let result):
+            if result.isPurchaseCancelled {
+                handlePurchaseCancelled(
                     checkoutContext: checkoutContext,
                     completion: completion
                 )
+            } else if result.isPurchasePending {
+                Log.printLog(
+                    l: .error,
+                    str: "Unexpected pending Adapty purchase for product \(checkoutContext.productID) on placement \(checkoutContext.placement)"
+                )
+                completion(.fail)
+            } else {
+                if let profile = result.profile {
+                    updateSubscriptionState(from: profile)
+                }
+                if let logEvent {
+                    PaywallEventLogger.purchaseSucceeded(checkoutContext, log: logEvent)
+                }
+                completion(.success)
             }
+        case .failure(let error):
+            handlePurchaseFailure(
+                error: error,
+                checkoutContext: checkoutContext,
+                completion: completion
+            )
         }
     }
 
@@ -167,30 +191,41 @@ class PurchaseService: @preconcurrency PurchaseServiceProtocol {
         completion: ((Bool) -> Void)? = nil
     ) {
         adaptyService.restorePurchases { [weak self] restoreResults in
-            switch restoreResults {
-            case .success(let profile):
-                let status = self?.updateSubscriptionState(from: profile) ?? .inactive
-                if let logEvent = self?.logEvent {
-                    PaywallEventLogger.restoreSucceeded(source: source, paywall: paywall, log: logEvent)
-                }
-                completion?(status.isSubActive)
-            case .failure(let error):
-                let metadata = PaywallFailureMetadata(error: error)
-                Log.printLog(
-                    l: .error,
-                    str: "Adapty restore failed: \(metadata.errorDomain) \(metadata.errorCode) \(metadata.reasonRawValue)"
-                )
-                if let logEvent = self?.logEvent {
-                    PaywallEventLogger.restoreFailed(
-                        reason: metadata.reason,
-                        source: source,
-                        errorDomain: metadata.errorDomain,
-                        errorCode: metadata.errorCode,
-                        log: logEvent
-                    )
-                }
-                completion?(false)
+            self?.finishRestore(restoreResults, source: source, paywall: paywall, completion: completion)
+        }
+    }
+
+    /// Updates the subscription state and logs the restore result.
+    /// Flows call this directly, because AdaptyUI runs the restore.
+    func finishRestore(
+        _ restoreResult: Result<AdaptyProfile, AdaptyError>,
+        source: PaywallSource,
+        paywall: PaywallAnalyticsContext?,
+        completion: ((Bool) -> Void)?
+    ) {
+        switch restoreResult {
+        case .success(let profile):
+            let status = updateSubscriptionState(from: profile)
+            if let logEvent {
+                PaywallEventLogger.restoreSucceeded(source: source, paywall: paywall, log: logEvent)
             }
+            completion?(status.isSubActive)
+        case .failure(let error):
+            let metadata = PaywallFailureMetadata(error: error)
+            Log.printLog(
+                l: .error,
+                str: "Adapty restore failed: \(metadata.errorDomain) \(metadata.errorCode) \(metadata.reasonRawValue)"
+            )
+            if let logEvent {
+                PaywallEventLogger.restoreFailed(
+                    reason: metadata.reason,
+                    source: source,
+                    errorDomain: metadata.errorDomain,
+                    errorCode: metadata.errorCode,
+                    log: logEvent
+                )
+            }
+            completion?(false)
         }
     }
 

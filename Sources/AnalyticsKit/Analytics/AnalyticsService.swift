@@ -8,6 +8,7 @@ import FirebaseAuth
 import AdSupport
 import UserNotifications
 import Adapty
+import AdaptyUI
 import FirebaseMessaging
 import Combine
 import AppsFlyerLib
@@ -250,10 +251,15 @@ class AnalyticsService: NSObject, AnalyticsServiceProtocol {
             purchaseConnector.purchaseRevenueDataSource = self
             purchaseConnector.autoLogPurchaseRevenue = .autoRenewableSubscriptions
 
-            FirebaseApp.configure()
+            // Without this check an app with no plist crashes here.
+            if Bundle.main.url(forResource: "GoogleService-Info", withExtension: "plist") != nil {
+                FirebaseApp.configure()
+                Messaging.messaging().delegate = self
+            } else {
+                Log.printLog(l: .error, str: "Firebase skipped: GoogleService-Info.plist is missing")
+            }
 
             setupMixPanelIfNeeded()
-            Messaging.messaging().delegate = self
             didSetupAnalytics = true
         }
 
@@ -433,9 +439,15 @@ class AnalyticsService: NSObject, AnalyticsServiceProtocol {
             .with(ipAddressCollectionDisabled: isRunningInChina)
             .build()
 
-        return await runSetupStep("adapty_activate") {
+        let isActivated = await runSetupStep("adapty_activate") {
             try await adapty.activate(with: configuration)
         }
+        guard isActivated else { return false }
+
+        await runSetupStep("adapty_ui_activate") {
+            try await AdaptyUI.activate()
+        }
+        return true
     }
 
     /// Resolves the final user identity and propagates it to every SDK.
@@ -489,18 +501,18 @@ class AnalyticsService: NSObject, AnalyticsServiceProtocol {
 
         // Lets Adapty join events from Firebase, Mixpanel, and Facebook in its pipelines.
         var identifiers = [
-            (operation: "adapty_mixpanel_integration_id", key: "mixpanel_user_id", value: Mixpanel.mainInstance().distinctId),
-            (operation: "adapty_facebook_integration_id", key: "facebook_anonymous_id", value: AppEvents.shared.anonymousID),
+            (operation: "adapty_mixpanel_integration_id", identifier: AdaptyIntegrationIdentifier.mixpanelUserId(Mixpanel.mainInstance().distinctId)),
+            (operation: "adapty_facebook_integration_id", identifier: .facebookAnonymousId(AppEvents.shared.anonymousID)),
         ]
         if let appInstanceID = Analytics.appInstanceID() {
             identifiers.append(
-                (operation: "adapty_firebase_integration_id", key: "firebase_app_instance_id", value: appInstanceID)
+                (operation: "adapty_firebase_integration_id", identifier: .firebaseAppInstanceId(appInstanceID))
             )
         }
 
         for identifier in identifiers {
             await runSetupStep(identifier.operation) {
-                try await Adapty.setIntegrationIdentifier(key: identifier.key, value: identifier.value)
+                try await Adapty.setIntegrationIdentifier(identifier.identifier)
             }
         }
     }
@@ -508,7 +520,8 @@ class AnalyticsService: NSObject, AnalyticsServiceProtocol {
     /// Returns the cached Firebase identity without touching the network, or `nil` on a
     /// first launch when no anonymous credential has been persisted yet.
     private func cachedFirebaseIdentity() -> ResolvedUserIdentity? {
-        Auth.auth().currentUser.map { .init(userID: $0.uid, source: .firebase) }
+        guard FirebaseApp.app() != nil else { return nil }
+        return Auth.auth().currentUser.map { .init(userID: $0.uid, source: .firebase) }
     }
 
     /// Returns the Firebase identity, signing in anonymously when nothing is cached, or `nil`
@@ -517,6 +530,7 @@ class AnalyticsService: NSObject, AnalyticsServiceProtocol {
     /// The cached branch costs nothing, so this is only slow on a genuine first launch.
     private func resolveFirebaseIdentity() async -> ResolvedUserIdentity? {
         if let cached = cachedFirebaseIdentity() { return cached }
+        guard FirebaseApp.app() != nil else { return nil }
 
         do {
             let signInResult = try await Auth.auth().signInAnonymously()
@@ -635,10 +649,10 @@ class AnalyticsService: NSObject, AnalyticsServiceProtocol {
             let attribution = rawAttribution?.dictionary()
             do {
                 if let adid {
-                    try await Adapty.setIntegrationIdentifier(key: "adjust_device_id", value: adid)
+                    try await Adapty.setIntegrationIdentifier(.adjustDeviceId(adid))
                 }
                 if let attribution {
-                    try await Adapty.updateAttribution(attribution, source: "adjust")
+                    try await Adapty.updateExternalAttribution(attribution, provider: .adjust)
                     _attributionData = attribution
                 }
 
@@ -747,6 +761,7 @@ class AnalyticsService: NSObject, AnalyticsServiceProtocol {
         _ application: UIApplication,
         didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
     ) {
+        guard FirebaseApp.app() != nil else { return }
         Messaging.messaging().apnsToken = deviceToken
     }
 
@@ -818,6 +833,7 @@ class AnalyticsService: NSObject, AnalyticsServiceProtocol {
         _application: UIApplication,
         didReceiveRemoteNotification userInfo: [AnyHashable: Any]
     ) {
+        guard FirebaseApp.app() != nil else { return }
         Messaging.messaging().appDidReceiveMessage(userInfo)
     }
 
@@ -890,7 +906,13 @@ class AnalyticsService: NSObject, AnalyticsServiceProtocol {
     }
 
     public func setPaywallFallback(fileURL: URL) {
-        Adapty.setFallback(fileURL: fileURL)
+        Task {
+            do {
+                try await Adapty.setFallback(fileURL: fileURL)
+            } catch {
+                Log.printLog(l: .error, str: "Adapty fallback failed: \(error.localizedDescription)")
+            }
+        }
     }
 
     // MARK: - Consent
@@ -1035,12 +1057,12 @@ extension AnalyticsService: AppsFlyerLibDelegate, DeepLinkDelegate, PurchaseReve
         let afUID = AppsFlyerLib.shared().getAppsFlyerUID()
         Task {
             do {
-                try await Adapty.setIntegrationIdentifier(key: "appsflyer_id", value: afUID)
+                try await Adapty.setIntegrationIdentifier(.appsflyerId(afUID))
             } catch {
                 Log.printLog(l: .error, str: "Adapty AppsFlyer integration id failed: \(error.localizedDescription)")
             }
             do {
-                try await Adapty.updateAttribution(conversionInfo, source: "appsflyer")
+                try await Adapty.updateExternalAttribution(conversionInfo, provider: .appsflyer)
             } catch {
                 Log.printLog(l: .error, str: "Adapty AppsFlyer attribution update failed: \(error.localizedDescription)")
             }
@@ -1133,7 +1155,7 @@ extension AnalyticsService: AdjustDelegate {
 
         Task {
             do {
-                try await Adapty.updateAttribution(attributionDict, source: "adjust")
+                try await Adapty.updateExternalAttribution(attributionDict, provider: .adjust)
             } catch {
                 Log.printLog(l: .error, str: "Failed to update Adapty attribution: \(error.localizedDescription)")
             }

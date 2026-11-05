@@ -146,7 +146,7 @@ struct AdaptyProductContext {
     let price: Float
     let currency: String
 
-    init(product: any AdaptyPaywallProduct) {
+    init(product: AdaptyPaywallProduct) {
         self.productID = product.vendorProductId
         self.price = Float(truncating: product.price as NSNumber)
         self.currency = product.priceLocale.currency?.identifier ?? product.currencyCode ?? "USD"

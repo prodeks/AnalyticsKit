@@ -1,3 +1,4 @@
+import FirebaseCore
 import FirebaseRemoteConfig
 
 public protocol RemoteConfigServiceProtocol {
@@ -8,33 +9,33 @@ public protocol RemoteConfigServiceProtocol {
 
 class RemoteConfigService: RemoteConfigServiceProtocol {
     
-    let remoteConfig: RemoteConfig
+    /// `nil` when the app has no Firebase configuration. Every read then returns the empty value.
+    let remoteConfig: RemoteConfig?
     
     static let shared = RemoteConfigService()
 
     private init() {
-        remoteConfig = RemoteConfig.remoteConfig()
+        guard FirebaseApp.app() != nil else {
+            remoteConfig = nil
+            return
+        }
+        let remoteConfig = RemoteConfig.remoteConfig()
         let settings = RemoteConfigSettings()
         settings.minimumFetchInterval = 0
         remoteConfig.configSettings = settings
+        self.remoteConfig = remoteConfig
     }
     
     public func getInt<K: RawRepresentable>(_ key: K) -> Int where K.RawValue == String {
-        let value = remoteConfig.configValue(forKey: key.rawValue)
-        let stringValue = value.numberValue.intValue
-        return stringValue
+        remoteConfig?.configValue(forKey: key.rawValue).numberValue.intValue ?? 0
     }
     
     public func getString<K: RawRepresentable>(_ key: K) -> String? where K.RawValue == String {
-        let value = remoteConfig.configValue(forKey: key.rawValue)
-        let stringValue = value.stringValue
-        return stringValue
+        remoteConfig?.configValue(forKey: key.rawValue).stringValue
     }
     
     public func getBool<K: RawRepresentable>(_ key: K) -> Bool where K.RawValue == String {
-        let value = remoteConfig.configValue(forKey: key.rawValue)
-        let boolValue = value.boolValue
-        return boolValue
+        remoteConfig?.configValue(forKey: key.rawValue).boolValue ?? false
     }
     
     func fetch() async {
@@ -46,6 +47,10 @@ class RemoteConfigService: RemoteConfigServiceProtocol {
     }
     
     func fetch(_ completion: @escaping () -> Void) {
+        guard let remoteConfig else {
+            completion()
+            return
+        }
         remoteConfig.fetch { status, error in
             Log.printLog(l: .debug, str: status.description)
             if status != .success {
@@ -58,7 +63,7 @@ class RemoteConfigService: RemoteConfigServiceProtocol {
                 return
             }
             
-            self.remoteConfig.activate { _, error in
+            remoteConfig.activate { _, error in
                 if let error {
                     Log.printLog(l: .error, str: error.localizedDescription)
                 } else {

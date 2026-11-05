@@ -61,7 +61,8 @@ public class PaywallController: UIViewController, PaywallViewDelegateProtocol, U
             navigationController.setNavigationBarHidden(true, animated: false)
         }
         
-        Adapty.logShowPaywall(adaptyPaywallData.adaptyPaywall)
+        let flow = adaptyPaywallData.adaptyFlow
+        Task { try? await Adapty.logShowFlow(flow) }
     }
 
     public override func viewDidAppear(_ animated: Bool) {
@@ -201,31 +202,11 @@ public class PaywallController: UIViewController, PaywallViewDelegateProtocol, U
     }
     
     func presentNoPurchasesToRestoreAlert() {
-        let alert = UIAlertController(
-            title: PurchasesAndAnalytics.Strings.noPurchasesToRestore,
-            message: nil,
-            preferredStyle: .alert
-        )
-        alert.addAction(.init(title: PurchasesAndAnalytics.Strings.cancel, style: .cancel))
-        if let presented = presentedViewController { 
-            presented.present(alert, animated: true)
-        } else {
-            present(alert, animated: true)
-        }
+        presentPaywallAlert(title: PurchasesAndAnalytics.Strings.noPurchasesToRestore)
     }
     
     func presentCannotPurchaseAlert() {
-        let alert = UIAlertController(
-            title: PurchasesAndAnalytics.Strings.somethingWentWrongDuringPurchase,
-            message: nil,
-            preferredStyle: .alert
-        )
-        alert.addAction(.init(title: PurchasesAndAnalytics.Strings.cancel, style: .cancel))
-        if let presented = presentedViewController { 
-            presented.present(alert, animated: true)
-        } else {
-            present(alert, animated: true)
-        }
+        presentPaywallAlert(title: PurchasesAndAnalytics.Strings.somethingWentWrongDuringPurchase)
     }
     
     func presentPolicyItem(_ item: URLConvertable) {
@@ -237,5 +218,13 @@ public class PaywallController: UIViewController, PaywallViewDelegateProtocol, U
         } else {
             present(n, animated: true)
         }
+    }
+}
+
+extension UIViewController {
+    func presentPaywallAlert(title: String) {
+        let alert = UIAlertController(title: title, message: nil, preferredStyle: .alert)
+        alert.addAction(.init(title: PurchasesAndAnalytics.Strings.cancel, style: .cancel))
+        (presentedViewController ?? self).present(alert, animated: true)
     }
 }

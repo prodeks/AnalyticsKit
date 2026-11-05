@@ -53,6 +53,9 @@ import StoreKit
     /// Paywall presentation; routes to Adapty or direct StoreKit based on region.
     public lazy var paywalls: PaywallServiceProtocol = _paywalls
 
+    /// Adapty Flows that the host app presents.
+    public lazy var flows: FlowServiceProtocol = _flows
+
     /// Firebase Remote Config wrapper used during startup prefetch.
     public lazy var remoteConfig: RemoteConfigServiceProtocol = _remoteConfig
 
@@ -66,6 +69,8 @@ import StoreKit
 
     /// Region-aware paywall facade backed by Adapty or `DirectStoreKitPaywallService`.
     lazy var _paywalls = AdaptyPaywallService(purchaseService: _purchases, analyticsService: _analytics)
+
+    lazy var _flows = AdaptyFlowService(purchaseService: _purchases, analyticsService: _analytics)
 
     lazy var _remoteConfig = RemoteConfigService.shared
 
