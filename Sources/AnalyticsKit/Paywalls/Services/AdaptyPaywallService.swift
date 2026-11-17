@@ -1,5 +1,6 @@
 import UIKit
 import StoreKit
+import Network
 import Adapty
 
 public protocol PaywallPlacementProtocol: Hashable {
@@ -31,13 +32,36 @@ struct CustomPaywallData {
 
 public typealias PaywallIdentifier = String
 
+/// Loads every placement once at startup, then fetches the placements that failed to load
+/// again when the network comes back or when a paywall is requested for one of them.
 class AdaptyPaywallService: PaywallServiceProtocol {
     
     public var placements = Set<String>()
     
     public var uiFactory: ((PaywallIdentifier) -> PaywallViewProtocol?)?
     
-    var paywallData = [CustomPaywallData]()
+    /// Loaded placements by identifier. A placement only ever goes from missing to loaded.
+    var paywallData = [String: CustomPaywallData]()
+    
+    private enum FetchTrigger: String {
+        case startup
+        case networkRestored = "network_restored"
+        case paywallMiss = "paywall_miss"
+    }
+    
+    private enum FetchState: Equatable {
+        /// The startup fetch has not run. Nothing else fetches before it, because it runs only
+        /// after the Adapty identity has settled.
+        case notStarted
+        case idle
+        /// One fetch is in flight. `next` is a trigger that arrived meanwhile; it is replayed
+        /// once the fetch ends, so the placements it was meant for get another attempt.
+        case fetching(next: FetchTrigger?)
+    }
+    
+    private var fetchState = FetchState.notStarted
+    private var pathMonitor: NWPathMonitor?
+    private var isNetworkSatisfied: Bool?
     
     let purchaseService: PurchaseService
     let analyticsService: AnalyticsService
@@ -55,7 +79,7 @@ class AdaptyPaywallService: PaywallServiceProtocol {
         Log.printLog(l: .debug, str: "Show paywall for placement: \(placement.identifier)")
         assert(uiFactory != nil)
         
-        if let customPaywallData = paywallData.first(where: { $0.placement == placement.identifier }) {
+        if let customPaywallData = paywallData[placement.identifier] {
             if let view = uiFactory?(customPaywallData.adaptyPaywall.name) {
                 let context = PaywallPresentationContext(
                     paywallID: view.paywallID.rawValue,
@@ -85,12 +109,79 @@ class AdaptyPaywallService: PaywallServiceProtocol {
                 placement: placement.identifier,
                 metadata: PaywallAnalyticsError.missingPaywallData
             )
+            requestFetch(.paywallMiss)
             return nil
         }
     }
     
     func fetchPaywallsAndProducts() async {
-        let paywalls = await placements
+        guard fetchState == .notStarted else { return }
+        fetchState = .fetching(next: nil)
+        startMonitoringNetwork()
+        await fetchMissingPaywalls(trigger: .startup)
+        finishFetch()
+    }
+    
+    private func requestFetch(_ trigger: FetchTrigger) {
+        switch fetchState {
+        case .notStarted, .fetching(next: .some(_)):
+            return
+        case .fetching(next: nil):
+            fetchState = .fetching(next: trigger)
+        case .idle:
+            guard !missingPlacements.isEmpty else { return }
+            fetchState = .fetching(next: nil)
+            Task {
+                await fetchMissingPaywalls(trigger: trigger)
+                finishFetch()
+            }
+        }
+    }
+    
+    private func finishFetch() {
+        let next: FetchTrigger?
+        if case let .fetching(queued) = fetchState {
+            next = queued
+        } else {
+            next = nil
+        }
+        fetchState = .idle
+        if let next {
+            requestFetch(next)
+        }
+    }
+    
+    private var missingPlacements: Set<String> {
+        placements.subtracting(paywallData.keys)
+    }
+    
+    private func startMonitoringNetwork() {
+        let monitor = NWPathMonitor()
+        monitor.pathUpdateHandler = { [weak self] path in
+            let isSatisfied = path.status == .satisfied
+            MainActor.assumeIsolated {
+                self?.networkPathChanged(isSatisfied: isSatisfied)
+            }
+        }
+        monitor.start(queue: .main)
+        pathMonitor = monitor
+    }
+    
+    /// Only a change to a usable network triggers a fetch. The first update just records the
+    /// state at startup, when the startup fetch is already running.
+    private func networkPathChanged(isSatisfied: Bool) {
+        defer { isNetworkSatisfied = isSatisfied }
+        if isSatisfied, isNetworkSatisfied == false {
+            requestFetch(.networkRestored)
+        }
+    }
+    
+    private func fetchMissingPaywalls(trigger: FetchTrigger) async {
+        let missing = missingPlacements
+        guard !missing.isEmpty else { return }
+        Log.printLog(l: .debug, str: "Paywalls: fetching \(missing.sorted()) [\(trigger.rawValue)]")
+        
+        let paywalls = await missing
             .asyncMap { identifier -> CustomPaywallData? in
                 do {
                     let paywall = try await Adapty.getPaywall(placementId: identifier)
@@ -131,7 +222,13 @@ class AdaptyPaywallService: PaywallServiceProtocol {
             }
             .compactMap { $0 }
         
-        self.paywallData = paywalls
+        for paywall in paywalls {
+            paywallData[paywall.placement] = paywall
+        }
+        Log.printLog(
+            l: .debug,
+            str: "Paywalls: loaded \(paywalls.map(\.placement).sorted()), missing \(missingPlacements.sorted())"
+        )
     }
     
     private func logPricesFailed(metadata: AnalyticsErrorMetadata) {
