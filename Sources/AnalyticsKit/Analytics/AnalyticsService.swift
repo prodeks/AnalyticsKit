@@ -1,4 +1,5 @@
 import Foundation
+import os
 import FirebaseAnalytics
 import FirebaseCore
 import AppTrackingTransparency
@@ -464,8 +465,12 @@ class AnalyticsService: NSObject, AnalyticsServiceProtocol {
             Log.printLog(l: .debug, str: "Identity: switching to \(identity.userID) [\(identity.source)]")
 
             if isAdaptyActivated {
-                await runSetupStep("adapty_identify") {
-                    try await adapty.identify(identity.userID)
+                // Offline, Adapty retries profile creation until it succeeds, so an unbounded
+                // await here would hold the paywall prefetch, and with it the fallback, forever.
+                await awaitAtMost(seconds: Self.adaptyIdentifyTimeout, step: "adapty_identify") {
+                    await self.runSetupStep("adapty_identify") {
+                        try await self.adapty.identify(identity.userID)
+                    }
                 }
             }
             await applyUserIdentity(identity)
@@ -477,6 +482,34 @@ class AnalyticsService: NSObject, AnalyticsServiceProtocol {
                 await self.setUpAdaptyIntegrations()
             }
             await self.startAdjustIfEligible()
+        }
+    }
+
+    private static let adaptyIdentifyTimeout: TimeInterval = 3
+
+    /// Returns when `work` finishes or after `seconds`, whichever comes first. `work` keeps
+    /// running after a timeout: cancelling a wait on Adapty's profile task does not end it.
+    private func awaitAtMost(seconds: TimeInterval, step: String, _ work: @escaping () async -> Void) async {
+        let didResume = OSAllocatedUnfairLock(initialState: false)
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            let resumeOnce = {
+                let isFirst = didResume.withLock { resumed in
+                    defer { resumed = true }
+                    return !resumed
+                }
+                if isFirst { continuation.resume() }
+            }
+            Task {
+                await work()
+                resumeOnce()
+            }
+            Task {
+                try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+                if !didResume.withLock({ $0 }) {
+                    Log.printLog(l: .error, str: "Setup step \(step) timed out after \(seconds)s")
+                }
+                resumeOnce()
+            }
         }
     }
 
