@@ -92,6 +92,18 @@ public protocol AnalyticsServiceProtocol: AnyObject {
     /// dedupe from events (e.g. `current_bmi_state`).
     func setUserProperties(_ properties: [String: Any])
 
+    /// Sets Mixpanel People properties only when the profile does not have them yet (`set_once`).
+    ///
+    /// Mixpanel only: Firebase and Adapty have no set-once operation. Use this for values that
+    /// must keep their first value, such as the cohort a user joined an experiment in.
+    func setUserPropertiesOnce(_ properties: [String: Any])
+
+    /// Registers Mixpanel super properties, which Mixpanel adds to every event it tracks,
+    /// including events the SDK sends itself, such as `$experiment_started`.
+    ///
+    /// Mixpanel only. Mixpanel stores them on disk, so a call with the same values is harmless.
+    func registerSuperProperties(_ properties: [String: Any])
+
     /// Registers bundled Adapty paywall JSON used when placements cannot be fetched.
     ///
     /// Call once at launch with the app's `paywallFallback.json` URL, before paywalls
@@ -920,6 +932,18 @@ class AnalyticsService: NSObject, AnalyticsServiceProtocol {
                 SentrySDK.capture(error: error)
             }
         }
+    }
+
+    public func setUserPropertiesOnce(_ properties: [String: Any]) {
+        guard !properties.isEmpty else { return }
+        setupMixPanelIfNeeded()
+        Mixpanel.mainInstance().people.setOnce(properties: mixpanelProperties(from: properties))
+    }
+
+    public func registerSuperProperties(_ properties: [String: Any]) {
+        guard !properties.isEmpty else { return }
+        setupMixPanelIfNeeded()
+        Mixpanel.mainInstance().registerSuperProperties(mixpanelProperties(from: properties))
     }
 
     public func setPaywallFallback(fileURL: URL) {
